@@ -1,0 +1,54 @@
+name: Test runner
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  runner:
+    name: Test the test runner
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: runner
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - run: pip install --require-hashes -r ../requirements.txt
+      - name: pytest tests minitest (including a differential run against pytest)
+        run: python -m pytest -v -p no:cacheprovider test_runner.py
+      - name: Mutation check (every planted bug must fail a test)
+        run: python mutation_check.py
+      - name: minitest runs its own self-test and writes JUnit XML
+        run: |
+          python minitest.py selftest --junit results/selftest.xml
+          python -c "
+          import xml.etree.ElementTree as ET
+          suite = ET.parse('results/selftest.xml').getroot()
+          print(suite.attrib)
+          assert int(suite.get('tests')) > 0 and suite.get('failures') == '0'
+          "
+      - name: A failing suite must exit 1
+        run: |
+          mkdir -p /tmp/failing
+          printf 'def test_fails():\n    assert 1 == 2\n' > /tmp/failing/test_fail.py
+          set +e
+          python minitest.py /tmp/failing
+          code=$?
+          set -e
+          echo "exit code: $code"
+          test "$code" -eq 1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: minitest-junit
+          path: runner/results/
