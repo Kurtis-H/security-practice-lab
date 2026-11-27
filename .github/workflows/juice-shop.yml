@@ -1,0 +1,36 @@
+name: Juice Shop
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  attack:
+    name: Juice Shop attacks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      # Intentionally vulnerable, and reachable only inside this job.
+      juice-shop:
+        image: bkimminich/juice-shop:v20.4.0
+        ports: ["3000:3000"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: pip install --require-hashes -r requirements.txt
+      - name: Run the attacks (each must solve its challenge on a fresh shop)
+        env:
+          JUICE_SHOP_FRESH: "1"
+        run: python -m pytest juice-shop -v --junitxml=results/juice-shop.xml
+      - name: Which challenges are solved now
+        if: always()
+        run: |
+          curl -s localhost:3000/api/Challenges/ | jq -r '.data[] | select(.solved) | "solved: \(.name) (\(.category))"' | sort
