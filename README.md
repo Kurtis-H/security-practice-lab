@@ -21,10 +21,10 @@ Security testing practice, automated so every result is repeatable and checked i
 
 | Challenge | OWASP Top 10 (2021) | The attack | The fix |
 |---|---|---|---|
-| Login Admin | A03 Injection | `' OR 1=1--` as the email makes the login query's `WHERE` always true | Parameterised queries |
-| Login Jim | A03 Injection | `jim@juice-sh.op'--` comments out the password check | Parameterised queries |
-| Database Schema | A03 Injection | `UNION SELECT sql FROM sqlite_master` through product search | Parameterised queries; least-privilege DB user |
-| User Credentials | A03 Injection | `UNION SELECT id,email,password FROM Users`, which exposes unsalted MD5 hashes too | Parameterised queries; a slow, salted hash (bcrypt, Argon2) |
+| Login Admin | A03 Injection | `' OR 1=1--` as the email makes the login query's `WHERE` always true | Parameterized queries |
+| Login Jim | A03 Injection | `jim@juice-sh.op'--` comments out the password check | Parameterized queries |
+| Database Schema | A03 Injection | `UNION SELECT sql FROM sqlite_master` through product search | Parameterized queries; least-privilege DB user |
+| User Credentials | A03 Injection | `UNION SELECT id,email,password FROM Users`, which exposes unsalted MD5 hashes too | Parameterized queries; a slow, salted hash (bcrypt, Argon2) |
 | View Basket | A01 Broken Access Control | A new customer reads `/rest/basket/1` (the admin's) by changing the id | Check the basket belongs to the caller |
 | Forged Feedback | A01 Broken Access Control | `UserId` in the body is trusted, so feedback posts in someone else's name | Take the author from the session, never the body |
 | Admin Registration | A01 / A04 | `"role": "admin"` in a sign-up body is copied onto the new user (mass assignment) | Allow-list the fields a client may set |
