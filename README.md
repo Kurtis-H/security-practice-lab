@@ -97,7 +97,7 @@ FUZZ_TARGET=buggy_seats_v2 ./fuzz_seats.py corpus/ -fork=2 -ignore_crashes=0 -ma
 
 ## 3. A test runner from scratch
 
-[`runner/minitest.py`](runner/minitest.py) is a pytest-style test runner in about 450 lines of standard-library Python. I built it to understand what a runner actually does between "collect" and "report".
+[`runner/minitest.py`](runner/minitest.py) is a pytest-style test runner in about 470 lines of standard-library Python. I built it to understand what a runner actually does between "collect" and "report".
 
 | Feature | How it works |
 |---|---|
