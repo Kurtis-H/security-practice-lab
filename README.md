@@ -1,12 +1,13 @@
 # security-practice-lab
 
 [![Juice Shop](https://github.com/Kurtis-H/security-practice-lab/actions/workflows/juice-shop.yml/badge.svg)](https://github.com/Kurtis-H/security-practice-lab/actions/workflows/juice-shop.yml)
+[![Fuzzing](https://github.com/Kurtis-H/security-practice-lab/actions/workflows/fuzzing.yml/badge.svg)](https://github.com/Kurtis-H/security-practice-lab/actions/workflows/fuzzing.yml)
 [![CodeQL](https://github.com/Kurtis-H/security-practice-lab/actions/workflows/codeql.yml/badge.svg)](https://github.com/Kurtis-H/security-practice-lab/actions/workflows/codeql.yml)
 
 Security testing practice, automated so every result is repeatable and checked in CI:
 
 1. **[Juice Shop, automated](#1-owasp-juice-shop-automated):** attacks against OWASP's deliberately vulnerable shop, each proven by the shop's own scoreboard.
-2. **Fuzzing with Atheris:** coming next.
+2. **[Fuzzing with Atheris](#2-fuzzing-with-atheris):** a fuzzer finds two bugs that a passing unit-test suite missed, and CI proves it finds them every run.
 3. **A test runner from scratch:** coming after.
 
 ## 1. OWASP Juice Shop, automated
@@ -52,3 +53,43 @@ JUICE_SHOP_FRESH=1 python -m pytest juice-shop -v
 ```
 
 Only ever point these tests at your own local Juice Shop.
+
+## 2. Fuzzing with Atheris
+
+[`fuzzing/`](fuzzing/) fuzzes a small parser for seat lists like `R1-1, R2-3..R2-5` (the kind of input the booking app takes). [Atheris](https://github.com/google/atheris) is Google's coverage-guided Python fuzzer, built on libFuzzer.
+
+The harness checks the parser's contract, not just "it didn't crash":
+
+- only `SeatParseError` may escape, never a raw exception,
+- at most 100 seats come back (no denial of service),
+- every label returned parses back to exactly itself.
+
+### What it found
+
+The repo keeps each version so CI can show the fuzzer finding the bug, not just say it did. All three versions pass the same 13 example-based tests.
+
+| Version | Bug the fuzzer found | Time to find it (local) | Fix |
+|---|---|---|---|
+| `buggy_seats_v1.py` | `R2-5..R2-2444…442` asks for a quadrillion seats and runs out of memory | 3 s | Cap the seat count before building the list |
+| `buggy_seats_v2.py` | `R2-³..R2-5` raises a raw `ValueError`: `"³".isdigit()` is true, but `int("³")` fails | 16 s | Match `[0-9]` instead of trusting `isdigit()` |
+| `seats.py` | Nothing: 12.9 million inputs in 2 minutes | | |
+
+Both findings are kept in [`fuzzing/regressions/`](fuzzing/regressions/), and pytest runs them against the fixed parser on every push.
+
+### What fuzzing taught me
+
+- **How the harness turns bytes into text matters more than run time.** My first harness used `ConsumeUnicodeNoSurrogates`, and five minutes found nothing in version 2. Reading the raw bytes as UTF-8 let ordinary byte mutations turn a `1` into the two bytes of `³`, and the same bug fell out in 16 seconds.
+- **libFuzzer stops at the first finding.** Version 1 has both bugs, but the memory blowup is found first and hides the other, so fixing one bug and fuzzing again is part of the loop.
+- **Fork mode doesn't work under Atheris here.** Every forked job died at once (134,000 "crashes", none real), because libFuzzer re-runs the Python script as if it were a binary.
+- **Example tests check the cases you thought of.** Every bug here survived a passing suite, because the suite never tried a range that big or a digit that isn't ASCII.
+
+### Run it
+
+```bash
+cd fuzzing
+pip install --require-hashes -r requirements.txt
+python -m pytest -v
+FUZZ_TARGET=seats python fuzz_seats.py corpus/ -max_total_time=60
+FUZZ_TARGET=buggy_seats_v2 python fuzz_seats.py corpus/ -max_total_time=120
+```
+

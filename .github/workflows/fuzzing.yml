@@ -1,0 +1,91 @@
+name: Fuzzing
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  fixed:
+    name: Fuzz the fixed parser
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: fuzzing
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - run: pip install --require-hashes -r requirements.txt
+      - name: Unit tests and kept regressions
+        run: python -m pytest -v
+      - name: Fuzz seats.py for 60 seconds (any finding fails the job)
+        run: |
+          mkdir -p work out
+          cp corpus/* work/
+          FUZZ_TARGET=seats python fuzz_seats.py work -max_total_time=60 \
+            -rss_limit_mb=1024 -artifact_prefix=out/
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fixed-parser-findings
+          path: fuzzing/out/
+
+  planted:
+    name: Fuzzer finds the planted bug (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: buggy_seats_v1
+            expect: oom-
+          - target: buggy_seats_v2
+            expect: crash-
+    defaults:
+      run:
+        working-directory: fuzzing
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - run: pip install --require-hashes -r requirements.txt
+      - name: Fuzz for up to 3 minutes; it must find the bug
+        env:
+          TARGET: ${{ matrix.target }}
+          EXPECT: ${{ matrix.expect }}
+        run: |
+          mkdir -p work out
+          cp corpus/* work/
+          start=$(date +%s)
+          set +e
+          FUZZ_TARGET="$TARGET" python fuzz_seats.py work -max_total_time=180 \
+            -rss_limit_mb=1024 -artifact_prefix=out/ > fuzz.log 2>&1
+          code=$?
+          set -e
+          tail -n 25 fuzz.log
+          found=$(ls out | grep "^$EXPECT" | head -n 1 || true)
+          if [ "$code" -eq 0 ] || [ -z "$found" ]; then
+            echo "::error::The fuzzer did not find the planted bug in $TARGET (exit $code)"
+            exit 1
+          fi
+          echo "Found $found in $(( $(date +%s) - start )) s (fuzzer exit $code)"
+          python -c "import sys; print('Input:', repr(open(sys.argv[1], 'rb').read()[:80]))" "out/$found"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: findings-${{ matrix.target }}
+          path: |
+            fuzzing/out/
+            fuzzing/fuzz.log
