@@ -2,13 +2,14 @@
 
 [![Juice Shop](https://github.com/Kurtis-H/security-practice-lab/actions/workflows/juice-shop.yml/badge.svg)](https://github.com/Kurtis-H/security-practice-lab/actions/workflows/juice-shop.yml)
 [![Fuzzing](https://github.com/Kurtis-H/security-practice-lab/actions/workflows/fuzzing.yml/badge.svg)](https://github.com/Kurtis-H/security-practice-lab/actions/workflows/fuzzing.yml)
+[![Test runner](https://github.com/Kurtis-H/security-practice-lab/actions/workflows/runner.yml/badge.svg)](https://github.com/Kurtis-H/security-practice-lab/actions/workflows/runner.yml)
 [![CodeQL](https://github.com/Kurtis-H/security-practice-lab/actions/workflows/codeql.yml/badge.svg)](https://github.com/Kurtis-H/security-practice-lab/actions/workflows/codeql.yml)
 
 Security testing practice, automated so every result is repeatable and checked in CI:
 
 1. **[Juice Shop, automated](#1-owasp-juice-shop-automated):** attacks against OWASP's deliberately vulnerable shop, each proven by the shop's own scoreboard.
 2. **[Fuzzing with Atheris](#2-fuzzing-with-atheris):** a fuzzer finds two bugs that a passing unit-test suite missed, and CI proves it finds them every run.
-3. **A test runner from scratch:** coming after.
+3. **[A test runner from scratch](#3-a-test-runner-from-scratch):** a pytest-style runner in one standard-library file, tested against pytest itself and checked with planted bugs.
 
 ## 1. OWASP Juice Shop, automated
 
@@ -92,5 +93,42 @@ pip install --require-hashes -r requirements.txt
 python -m pytest -v
 FUZZ_TARGET=seats ./fuzz_seats.py corpus/ -fork=2 -max_total_time=60
 FUZZ_TARGET=buggy_seats_v2 ./fuzz_seats.py corpus/ -fork=2 -ignore_crashes=0 -max_total_time=300
+```
+
+## 3. A test runner from scratch
+
+[`runner/minitest.py`](runner/minitest.py) is a pytest-style test runner in about 450 lines of standard-library Python. I built it to understand what a runner actually does between "collect" and "report".
+
+| Feature | How it works |
+|---|---|
+| Discovery | `test_*.py` files (skipping hidden folders), `test_*` functions, `Test*` classes with a fresh instance per test |
+| Fixtures | `@fixture` functions injected by parameter name, can use other fixtures, `function` or `session` scope, teardown after `yield` (newest first), shared through `conftest.py` |
+| Marks | `@parametrize` (stacking multiplies the cases), `@skip`, `@skip_if`, strict `@xfail`, and `raises()` |
+| Failure report | The failing line plus the local values it uses: `total = 100`, `prices = [100, 250]` |
+| CI output | JUnit XML, and pytest's exit codes: 0 passed, 1 failed, 2 import error, 4 usage error, 5 no tests |
+| Fixture problems | A missing fixture, a cycle (`a -> b -> a`), a session fixture using a per-test one, or a failing teardown is an **error**, not a test failure |
+
+### How it's tested
+
+- **[`test_runner.py`](runner/test_runner.py) (pytest, 24 tests):** each test writes a small project into a temp folder and runs minitest on it. A broken runner could pass its own tests, so a different runner does the judging.
+- **Differential test:** the same plain-assert suite runs under minitest and real pytest, and every test must get the same verdict.
+- **[Mutation check](runner/mutation_check.py):** CI plants 12 realistic bugs, one at a time (teardown order reversed, xfail no longer strict, errors exiting 0, and so on), and fails if the suite misses any. All 12 are caught.
+- **Self-test:** [`selftest/`](runner/selftest/) uses minitest's own API, and CI runs it with minitest and checks the JUnit file.
+
+### What building it taught me
+
+- **The tests found two real bugs in the first run.** With no paths given, it crashed: argparse doesn't apply `type=Path` to a list default. And an assert message with a control character (`\x1b` from coloured output) made the JUnit XML invalid. That would break the CI report for the whole suite over one message, so the runner now escapes those characters.
+- **Mutation testing found a gap a green suite hid.** The first mutation run caught 11 of 12. Nothing checked that teardowns run newest-first, which matters whenever a connection must close before its database. One new test closed it.
+- **A script is `__main__`, not its module name.** Test files that `import minitest` would load a second copy with an empty fixture registry. The runner registers itself under its own name first.
+- **Fixture errors and test failures are different results.** "Your code is wrong" and "your test setup is wrong" need different fixes, so they are reported differently, as pytest does.
+
+### Run it
+
+```bash
+cd runner
+python minitest.py selftest --junit results.xml   # minitest running its self-test
+pip install --require-hashes -r ../requirements.txt
+python -m pytest test_runner.py                    # pytest testing minitest
+python mutation_check.py
 ```
 

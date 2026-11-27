@@ -9,3 +9,4 @@ fuzzing/work/
 fuzzing/fuzz.log
 oom-*
 crash-*
+runner/results/
