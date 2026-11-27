@@ -1,7 +1,10 @@
+#!/usr/bin/env python3
 """Fuzz the seat parser with Atheris (coverage-guided, libFuzzer-based).
 
-    python fuzz_seats.py corpus/ -max_total_time=60              # the real parser
-    FUZZ_TARGET=buggy_seats python fuzz_seats.py corpus/ -max_total_time=120
+    ./fuzz_seats.py corpus/ -fork=2 -max_total_time=60     # the real parser
+    FUZZ_TARGET=buggy_seats_v2 ./fuzz_seats.py corpus/ -fork=2 -ignore_crashes=0
+
+Run it as ./fuzz_seats.py, not python fuzz_seats.py: fork mode re-runs argv[0].
 
 The checks are the parser's contract, not just "doesn't crash":
   * only SeatParseError may escape,

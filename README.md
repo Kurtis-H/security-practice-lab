@@ -70,17 +70,18 @@ The repo keeps each version so CI can show the fuzzer finding the bug, not just 
 
 | Version | Bug the fuzzer found | Time to find it (local) | Fix |
 |---|---|---|---|
-| `buggy_seats_v1.py` | `R2-5..R2-2444…442` asks for a quadrillion seats and runs out of memory | 3 s | Cap the seat count before building the list |
-| `buggy_seats_v2.py` | `R2-³..R2-5` raises a raw `ValueError`: `"³".isdigit()` is true, but `int("³")` fails | 16 s | Match `[0-9]` instead of trusting `isdigit()` |
+| `buggy_seats_v1.py` | `R2-5..R2-2444…442` asks for far more seats than exist and runs out of memory | 1 to 4 s | Cap the seat count before building the list |
+| `buggy_seats_v2.py` | `R2-³..R2-5` raises a raw `ValueError`: `"³".isdigit()` is true, but `int("³")` fails | 14 s to 5 min | Match `[0-9]` instead of trusting `isdigit()` |
 | `seats.py` | Nothing: 12.9 million inputs in 2 minutes | | |
 
-Both findings are kept in [`fuzzing/regressions/`](fuzzing/regressions/), and pytest runs them against the fixed parser on every push.
+Both findings are kept in [`fuzzing/regressions/`](fuzzing/regressions/), and pytest runs them against the fixed parser on every push. In CI, [`check_finding.py`](fuzzing/check_finding.py) confirms each finding is the planted bug, so an unrelated crash can't pass as a catch.
 
 ### What fuzzing taught me
 
-- **How the harness turns bytes into text matters more than run time.** My first harness used `ConsumeUnicodeNoSurrogates`, and five minutes found nothing in version 2. Reading the raw bytes as UTF-8 let ordinary byte mutations turn a `1` into the two bytes of `³`, and the same bug fell out in 16 seconds.
+- **How the harness turns bytes into text matters more than run time.** My first harness used `ConsumeUnicodeNoSurrogates`, and five minutes found nothing in version 2. Reading the raw bytes as UTF-8 let ordinary byte mutations turn a `1` into the two bytes of `³`, and the same bug fell out in seconds to minutes.
+- **Time to find is luck, so measure it before setting a budget.** v2's bug took 16 s in my first run, then 179 s in CI against a 180 s limit. Across seeds it ranged from 14 s to over 5 minutes. CI now forks a worker per core and allows 8 minutes.
 - **libFuzzer stops at the first finding.** Version 1 has both bugs, but the memory blowup is found first and hides the other, so fixing one bug and fuzzing again is part of the loop.
-- **Fork mode doesn't work under Atheris here.** Every forked job died at once (134,000 "crashes", none real), because libFuzzer re-runs the Python script as if it were a binary.
+- **Run the harness as an executable for fork mode.** With `python fuzz_seats.py -fork=2`, every forked job died at once (134,000 "crashes", none real): libFuzzer re-runs `argv[0]`, the script, as if it were a binary. A shebang plus `./fuzz_seats.py` fixed it, and now the fuzzer uses every core.
 - **Example tests check the cases you thought of.** Every bug here survived a passing suite, because the suite never tried a range that big or a digit that isn't ASCII.
 
 ### Run it
@@ -89,7 +90,7 @@ Both findings are kept in [`fuzzing/regressions/`](fuzzing/regressions/), and py
 cd fuzzing
 pip install --require-hashes -r requirements.txt
 python -m pytest -v
-FUZZ_TARGET=seats python fuzz_seats.py corpus/ -max_total_time=60
-FUZZ_TARGET=buggy_seats_v2 python fuzz_seats.py corpus/ -max_total_time=120
+FUZZ_TARGET=seats ./fuzz_seats.py corpus/ -fork=2 -max_total_time=60
+FUZZ_TARGET=buggy_seats_v2 ./fuzz_seats.py corpus/ -fork=2 -ignore_crashes=0 -max_total_time=300
 ```
 
