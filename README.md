@@ -110,7 +110,7 @@ FUZZ_TARGET=buggy_seats_v2 ./fuzz_seats.py corpus/ -fork=2 -ignore_crashes=0 -ma
 
 ### How it's tested
 
-- **[`test_runner.py`](runner/test_runner.py) (pytest, 24 tests):** each test writes a small project into a temp folder and runs minitest on it. A broken runner could pass its own tests, so a different runner does the judging.
+- **[`test_runner.py`](runner/test_runner.py) (pytest, 25 tests):** each test writes a small project into a temp folder and runs minitest on it. A broken runner could pass its own tests, so a different runner does the judging.
 - **Differential test:** the same plain-assert suite runs under minitest and real pytest, and every test must get the same verdict.
 - **[Mutation check](runner/mutation_check.py):** CI plants 12 realistic bugs, one at a time (teardown order reversed, xfail no longer strict, errors exiting 0, and so on), and fails if the suite misses any. All 12 are caught.
 - **Self-test:** [`selftest/`](runner/selftest/) uses minitest's own API, and CI runs it with minitest and checks the JUnit file.

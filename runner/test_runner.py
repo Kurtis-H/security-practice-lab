@@ -338,6 +338,7 @@ def test_failure_report_shows_the_line_and_its_values(project):
         """
         def test_total():
             prices = [100, 250]
+            t = "unrelated"
             total = prices[0]
             assert total == sum(prices), "total skips seats"
         """,
@@ -346,6 +347,7 @@ def test_failure_report_shows_the_line_and_its_values(project):
     assert "AssertionError: total skips seats" in output
     assert 'assert total == sum(prices), "total skips seats"' in output
     assert "total = 100" in output and "prices = [100, 250]" in output
+    assert "t = 'unrelated'" not in output  # "t" is in "total", but isn't used
 
 
 def test_junit_counts_and_survives_hostile_text(project):
@@ -425,3 +427,21 @@ def test_runs_as_a_script_with_its_own_imports(tmp_path):
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert "1 passed" in result.stdout
+
+
+def test_test_modules_are_real_modules(project):
+    """pickle finds classes through sys.modules, so test files must be in it."""
+    project.write(
+        "test_a.py",
+        """
+        import pickle
+
+        class Seat:
+            def __init__(self, row):
+                self.row = row
+
+        def test_round_trip():
+            assert pickle.loads(pickle.dumps(Seat(3))).row == 3
+        """,
+    )
+    assert project.run()[0] == minitest.EXIT_OK

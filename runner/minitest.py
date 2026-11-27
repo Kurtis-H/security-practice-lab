@@ -148,6 +148,7 @@ def load_module(path: Path):
     name = "minitest_" + "_".join(path.with_suffix("").parts[-3:])
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module  # pickle, dataclasses and typing look modules up here
     sys.path.insert(0, str(path.parent))
     try:
         spec.loader.exec_module(module)
@@ -277,8 +278,9 @@ def _describe_failure(error: BaseException) -> tuple[str, str]:
     last = frames[-1]
     lines = [f"{last.filename}:{last.lineno}", f"    {last.line}"]
     if tb is not None:
+        used = set(re.findall(r"[A-Za-z_]\w*", last.line or ""))  # whole names only
         for name, value in tb.tb_frame.f_locals.items():
-            if not name.startswith("__") and name in (last.line or ""):
+            if not name.startswith("__") and name in used:
                 lines.append(f"    {name} = {_short_repr(value)}")
     return message, "\n".join(lines)
 
