@@ -36,7 +36,12 @@ def is_unicode_digit_crash(text: str) -> bool:
     return False
 
 
-CHECKS = {"buggy_seats_v1": is_range_dos, "buggy_seats_v2": is_unicode_digit_crash}
+def is_either_v1_bug(text: str) -> bool:
+    """v1 has both bugs; the fuzzer reports whichever it hits first."""
+    return is_range_dos(text) or is_unicode_digit_crash(text)
+
+
+CHECKS = {"buggy_seats_v1": is_either_v1_bug, "buggy_seats_v2": is_unicode_digit_crash}
 
 if __name__ == "__main__":
     target, path = sys.argv[1], Path(sys.argv[2])

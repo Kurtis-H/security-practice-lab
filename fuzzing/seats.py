@@ -13,7 +13,7 @@ import re
 MAX_SEATS = 100  # one request can't ask for more; also stops "R1-1..R1-999999999"
 
 # ASCII digits only. str.isdigit() and \d also accept "²", "٣" and other
-# Unicode digits that int() may reject; see buggy_seats.py.
+# Unicode digits that int() may reject; see buggy_seats_v2.py.
 _LABEL = re.compile(r"R([0-9]{1,3})-([0-9]{1,3})")
 
 

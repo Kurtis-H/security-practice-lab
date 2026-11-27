@@ -88,11 +88,12 @@ def test_v2_really_had_the_unicode_digit_bug():
     [
         ("buggy_seats_v1", "v1-range-dos", True),
         ("buggy_seats_v2", "v2-unicode-digit", True),
-        ("buggy_seats_v1", "v2-unicode-digit", False),
+        ("buggy_seats_v1", "v2-unicode-digit", True),  # v1 has both bugs
         ("buggy_seats_v2", "v1-range-dos", False),
     ],
 )
 def test_ci_recognises_each_planted_bug(target, finding, matches):
     """CI uses these checks, so a wrong kind of finding can't pass as a catch."""
+    assert check_finding.CHECKS[target]("R1-1, R1-2") is False
     text = (HERE / "regressions" / finding).read_bytes().decode()
     assert check_finding.CHECKS[target](text) is matches
