@@ -3,11 +3,12 @@
 
 def test_read_another_users_basket(shop, solves):
     # The basket id in the URL is trusted; nothing checks it's yours (IDOR).
-    token = shop.token("admin@juice-sh.op", "admin123")
+    # An ordinary new customer reads basket 1, which belongs to the admin.
+    token = shop.new_user_token("eve@example.test")
     with solves("View Basket"):
-        response = shop.get("/rest/basket/2", headers={"Authorization": f"Bearer {token}"})
+        response = shop.get("/rest/basket/1", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200
-    assert response.json()["data"]["id"] == 2
+    assert response.json()["data"]["id"] == 1
 
 
 def test_post_feedback_as_someone_else(shop, solves):

